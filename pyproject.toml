@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumen-enterprise-gateway"
+version = "2.0.0"
+description = "Ultra-Low-Latency, Zero-Trust Model Context Protocol (MCP) Gateway, Priority Traffic Manager & Enterprise SDK for the Alexa+ Enterprise Ecosystem"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Lumen Systems Architecture Team", email = "architecture@lumen.enterprise.aws" }
+]
+keywords = [
+    "model-context-protocol",
+    "mcp",
+    "alexa-plus",
+    "zero-trust",
+    "qos",
+    "traffic-manager",
+    "amazon-hackathon-2026",
+    "enterprise-ai"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Networking",
+    "Topic :: Security :: Cryptography",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.scripts]
+lumen-gateway = "lumen_engine:main"
+lumen-web = "lumen_http_bridge:main"
+
+[tool.setuptools]
+py-modules = [
+    "lumen_config",
+    "lumen_handshake",
+    "lumen_tools",
+    "lumen_sdk",
+    "lumen_engine",
+    "lumen_http_bridge"
+]
