@@ -1,0 +1,75 @@
+{
+  "mcpServers": {
+    "lumen-zero-trust-enterprise": {
+      "command": "python3",
+      "args": [
+        "lumen_engine.py",
+        "--mode",
+        "stdio"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "LUMEN_ENVIRONMENT": "production",
+        "LUMEN_HMAC_SECRET": "lumen-secret-key-alexa-enterprise-2026",
+        "LUMEN_MAX_FRAME_BYTES": "65536",
+        "LUMEN_PROTOCOL_VERSION": "2026-07-28"
+      }
+    }
+  },
+  "awsEcsSidecarContainerDefinition": {
+    "name": "lumen-mcp-gateway-sidecar",
+    "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/lumen-enterprise-gateway:2.0.0",
+    "essential": true,
+    "cpu": 256,
+    "memory": 512,
+    "portMappings": [
+      {
+        "containerPort": 8080,
+        "hostPort": 8080,
+        "protocol": "tcp"
+      }
+    ],
+    "environment": [
+      {
+        "name": "LUMEN_PORT",
+        "value": "8080"
+      },
+      {
+        "name": "LUMEN_HOST",
+        "value": "0.0.0.0"
+      },
+      {
+        "name": "AWS_REGION",
+        "value": "us-east-1"
+      },
+      {
+        "name": "LUMEN_PROTOCOL_VERSION",
+        "value": "2026-07-28"
+      }
+    ],
+    "secrets": [
+      {
+        "name": "LUMEN_HMAC_SECRET",
+        "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:lumen/hmac-key-2026"
+      }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/aws/ecs/lumen-enterprise-gateway",
+        "awslogs-region": "us-east-1",
+        "awslogs-stream-prefix": "lumen-sidecar"
+      }
+    },
+    "healthCheck": {
+      "command": [
+        "CMD-SHELL",
+        "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/telemetry')\" || exit 1"
+      ],
+      "interval": 15,
+      "timeout": 5,
+      "retries": 3,
+      "startPeriod": 5
+    }
+  }
+}

@@ -512,6 +512,37 @@
       color: var(--text-muted);
     }
 
+    /* Universal Export Cards */
+    .export-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .export-card:hover {
+      border-color: var(--accent-cyan);
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+    }
+    .export-card.active-export {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 210, 255, 0.08);
+      box-shadow: 0 0 12px rgba(0, 210, 255, 0.2);
+    }
+    .export-ext-badge {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      width: fit-content;
+    }
+
     /* Token Bucket Visual Gauges */
     .lane-card {
       background: #090f1d;
@@ -716,10 +747,11 @@
   <!-- Navigation Tabs -->
   <nav class="tabs-nav">
     <div class="tabs-container">
-      <button class="tab-btn active" onclick="switchTab('tab-overview')">&#128640; Enterprise Overview & SDK</button>
-      <button class="tab-btn" onclick="switchTab('tab-console')">&#9881; Zero-Trust Ops & HITL Console</button>
-      <button class="tab-btn" onclick="switchTab('tab-qos')">&#128202; Priority Traffic Manager (QoS)</button>
-      <button class="tab-btn" onclick="switchTab('tab-audit')">&#128279; BLAKE2b Audit Ledger</button>
+      <button class="tab-btn active" onclick="switchTab('tab-overview')">&#128640; 1. Enterprise Overview & SDK</button>
+      <button class="tab-btn" onclick="switchTab('tab-console')">&#9881; 2. Zero-Trust Ops & HITL Console</button>
+      <button class="tab-btn" onclick="switchTab('tab-qos')">&#128202; 3. Priority Traffic Manager (QoS)</button>
+      <button class="tab-btn" onclick="switchTab('tab-audit')">&#128279; 4. BLAKE2b Audit Ledger</button>
+      <button class="tab-btn" onclick="switchTab('tab-export')">&#128229; 5. AWS Bridge & Universal Exports</button>
     </div>
   </nav>
 
@@ -1026,6 +1058,86 @@ asyncio.run(main())
       </div>
     </div>
 
+    <!-- ================================================================= -->
+    <!-- TAB 5: AWS Bridge & Universal Exports                             -->
+    <!-- ================================================================= -->
+    <div id="tab-export" class="tab-panel">
+      <div id="panel-export">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">&#128229; 5. Universal Cloud Export Engine & AWS Bedrock Bridge</div>
+            <div id="export-meta-badge" class="status-badge status-ok">LIVE DATA READY</div>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+            Export live Zero-Trust artifacts, signed MCP tool catalogs, AWS CloudWatch / S3 audit streams,
+            and formal compliance certificates for Amazon Bedrock AI Agents and Alexa+ Enterprise Orchestrator.
+          </p>
+
+          <!-- 5 Export Selector Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="export-card active-export" data-format="aws_bedrock" onclick="selectExportCard('aws_bedrock')">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="export-ext-badge" style="background: rgba(0, 210, 255, 0.2); color: #38bdf8;">.JSON</span>
+                <span style="font-size: 1.1rem;">&#129302;</span>
+              </div>
+              <strong style="color: var(--text-main); font-size: 0.9rem;">Amazon Bedrock & Alexa+ Bundle</strong>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">MCP action group catalog, AWS IAM execution roles & KMS CMK ARNs</span>
+            </div>
+
+            <div class="export-card" data-format="csv" onclick="selectExportCard('csv')">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="export-ext-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">.CSV</span>
+                <span style="font-size: 1.1rem;">&#128202;</span>
+              </div>
+              <strong style="color: var(--text-main); font-size: 0.9rem;">Audit Ledger Spreadsheet</strong>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">BLAKE2b hash chain entries for Excel & Google Sheets ingestion</span>
+            </div>
+
+            <div class="export-card" data-format="ndjson" onclick="selectExportCard('ndjson')">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="export-ext-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">.NDJSON</span>
+                <span style="font-size: 1.1rem;">&#9729;</span>
+              </div>
+              <strong style="color: var(--text-main); font-size: 0.9rem;">AWS CloudWatch & S3 Stream</strong>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Line-delimited JSON stream for Athena lakehouses & QuickSight</span>
+            </div>
+
+            <div class="export-card" data-format="mcp_config" onclick="selectExportCard('mcp_config')">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="export-ext-badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">.JSON</span>
+                <span style="font-size: 1.1rem;">&#128230;</span>
+              </div>
+              <strong style="color: var(--text-main); font-size: 0.9rem;">MCP Host & AWS ECS Sidecar</strong>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Drop-in MCP host server definition & AWS ECS task sidecar container</span>
+            </div>
+
+            <div class="export-card" data-format="compliance_report" onclick="selectExportCard('compliance_report')">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="export-ext-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">.MD</span>
+                <span style="font-size: 1.1rem;">&#128737;</span>
+              </div>
+              <strong style="color: var(--text-main); font-size: 0.9rem;">Executive SLA & SOC2 Cert</strong>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">14-gate scorecard certificate, sub-millisecond p99 SLA & audit proof</span>
+            </div>
+          </div>
+
+          <!-- Live Export Preview & Actions -->
+          <div class="card" style="background: #040810; margin-bottom: 0;">
+            <div class="card-header" style="border-bottom-color: rgba(255,255,255,0.08);">
+              <div style="font-size: 0.9rem; font-weight: 700; color: var(--accent-cyan);" id="export-preview-title">
+                Payload Preview: lumen_aws_bedrock_alexa_bundle.json
+              </div>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button class="btn btn-secondary" id="btn-copy-export" onclick="copyExportPayload()">&#128203; Copy Export Payload</button>
+                <button class="btn btn-primary" onclick="downloadExportFile()">&#11015; Download Selected Export File</button>
+              </div>
+            </div>
+            <textarea id="export-preview-box" rows="16" style="width: 100%; background: #020409; color: #a5f3fc; font-size: 0.82rem; font-family: var(--font-mono);" readonly></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <!-- HITL Executive MFA Approval Modal -->
@@ -1127,6 +1239,8 @@ asyncio.run(main())
       `;
     }
 
+    let currentExportFormat = "aws_bedrock";
+
     function switchTab(tabId) {
       document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
       document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
@@ -1136,7 +1250,93 @@ asyncio.run(main())
       if (tabId === "tab-qos" || tabId === "tab-audit") {
         fetchTelemetry();
         if (tabId === "tab-audit") fetchAuditRecords();
+      } else if (tabId === "tab-export") {
+        loadExportPreview(currentExportFormat);
       }
+    }
+
+    async function selectExportCard(format) {
+      currentExportFormat = format;
+      document.querySelectorAll(".export-card").forEach(c => {
+        c.classList.toggle("active-export", c.dataset.format === format);
+      });
+      const titles = {
+        "aws_bedrock": "Payload Preview: lumen_aws_bedrock_alexa_bundle.json",
+        "csv": "Payload Preview: lumen_audit_ledger.csv",
+        "ndjson": "Payload Preview: lumen_aws_cloudwatch_audit.ndjson",
+        "mcp_config": "Payload Preview: lumen_mcp_and_aws_ecs_config.json",
+        "compliance_report": "Payload Preview: lumen_compliance_certificate.md"
+      };
+      const titleElem = document.getElementById("export-preview-title");
+      if (titleElem) titleElem.textContent = titles[format] || `Payload Preview: ${format}`;
+      await loadExportPreview(format);
+    }
+
+    async function loadExportPreview(format) {
+      const box = document.getElementById("export-preview-box");
+      const meta = document.getElementById("export-meta-badge");
+      if (!box) return;
+      box.value = "Loading live artifact from /api/export?format=" + format + "...";
+      try {
+        const resp = await fetch("/api/export?format=" + format);
+        const text = await resp.text();
+        box.value = text;
+        const lines = text.split("\n").length;
+        const bytes = new Blob([text]).size;
+        if (meta) {
+          meta.textContent = `${format.toUpperCase()} | ${bytes} bytes | ${lines} lines`;
+          meta.className = "status-badge status-ok";
+        }
+      } catch (err) {
+        box.value = "Failed to load export: " + err.message;
+        if (meta) meta.className = "status-badge status-err";
+      }
+    }
+
+    function copyExportPayload() {
+      const box = document.getElementById("export-preview-box");
+      if (!box || !box.value) return;
+      navigator.clipboard.writeText(box.value).then(() => {
+        const btn = document.getElementById("btn-copy-export");
+        if (btn) {
+          const orig = btn.innerHTML;
+          btn.innerHTML = "&#10004; Copied to Clipboard!";
+          setTimeout(() => btn.innerHTML = orig, 1800);
+        }
+      });
+    }
+
+    function downloadExportFile() {
+      const box = document.getElementById("export-preview-box");
+      if (!box || !box.value) return;
+
+      const filenames = {
+        "aws_bedrock": "lumen_aws_bedrock_alexa_bundle.json",
+        "csv": "lumen_audit_ledger.csv",
+        "ndjson": "lumen_aws_cloudwatch_audit.ndjson",
+        "mcp_config": "lumen_mcp_and_aws_ecs_config.json",
+        "compliance_report": "lumen_compliance_certificate.md"
+      };
+      const mimeTypes = {
+        "aws_bedrock": "application/json",
+        "csv": "text/csv",
+        "ndjson": "application/x-ndjson",
+        "mcp_config": "application/json",
+        "compliance_report": "text/markdown"
+      };
+
+      const filename = filenames[currentExportFormat] || `lumen_export_${currentExportFormat}.txt`;
+      const mime = mimeTypes[currentExportFormat] || "text/plain";
+
+      const blob = new Blob([box.value], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     function copySdkCode() {

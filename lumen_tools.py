@@ -296,6 +296,17 @@ _MOCK_ENTERPRISE_RECORDS: List[Dict[str, Any]] = [
         "wireRoutingToken": "ROUT-9999-EU",
         "amount": 9999999.00,
     },
+    {
+        "recordId": "REC-SEC-001",
+        "tenantId": "tenant-alpha",
+        "department": "SECURITY",
+        "title": "Zero-Trust MCP Gateway Perimeter Audit",
+        "classification": ClearanceLevel.INTERNAL,
+        "employeeName": "Chief Information Security Officer",
+        "ssnLast4": "0001",
+        "wireRoutingToken": "ROUT-SEC-01",
+        "amount": 0.00,
+    },
 ]
 
 
@@ -418,8 +429,8 @@ class ToolRegistry:
                 # Multi-tenant boundary
                 if rec["tenantId"] != target_tenant:
                     continue
-                # Department filter
-                if rec["department"] != department:
+                # Department filter (case-insensitive)
+                if rec["department"].upper() != department.upper():
                     continue
                 # Clearance ceiling filter (caller cannot see records classified higher than their clearance)
                 if rec["classification"] > sec_ctx.clearance:
@@ -465,7 +476,10 @@ class ToolRegistry:
                     "properties": {
                         "department": {
                             "type": "string",
-                            "enum": ["FINANCE", "ENGINEERING", "HR", "LEGAL", "OPERATIONS"],
+                            "enum": [
+                                "FINANCE", "ENGINEERING", "HR", "LEGAL", "OPERATIONS", "SECURITY",
+                                "finance", "engineering", "hr", "legal", "operations", "security"
+                            ],
                         },
                         "tenantId": {
                             "type": "string",
