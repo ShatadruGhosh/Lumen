@@ -1,16 +1,18 @@
 """
-Lumen v2.0 Enterprise Gateway - Full-Stack HTTP Bridge, Telemetry & Universal Export Server
+Lumen v2.0 Enterprise Gateway - Production-Hardened HTTP Bridge & AWS Bedrock Server
 Amazon Developer Hackathon 2026: "Build, Ship, Shape" (Alexa+ Enterprise Ecosystem)
 
 Strict Zero-Dependency Implementation (Python >= 3.11 Standard Library only).
-Bridges web browser UI to live in-memory LumenJsonRpcDispatcher, telemetry,
-cryptographic audit verification, selftest suite, and universal cloud exports (AWS Bedrock, CSV, NDJSON, ECS Sidecar, SOC2 Certificate).
+Provides constant-time internal API key enforcement (hmac.compare_digest),
+unauthenticated AWS health checks (/healthz), strict HTTP security headers,
+universal export formats, dynamic tool registration, and direct JSON-RPC 2.0 proxying.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import hmac
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -24,6 +26,7 @@ from lumen_config import (
     ClearanceLevel,
     LumenConfig,
     PriorityTrafficManager,
+    ToolName,
     TrafficPriority,
     compute_request_hmac,
 )
@@ -34,7 +37,7 @@ from lumen_engine import (
 )
 from lumen_handshake import LifecycleState
 from lumen_sdk import LumenCredentials, LumenEnterpriseClient
-from lumen_tools import ToolRegistry
+from lumen_tools import ToolDefinition, ToolRegistry
 
 
 # -----------------------------------------------------------------------------
@@ -58,7 +61,7 @@ class LumenWebBridgeRuntime:
             tool_registry=self.tools,
         )
 
-        # Bootstrap into OPERATIONAL state for immediate UI readiness
+        # Bootstrap into OPERATIONAL state for immediate readiness
         self._bootstrap_handshake()
 
         # Bind in-memory SDK client
@@ -115,7 +118,7 @@ class LumenWebBridgeRuntime:
 # HTTP Request Handler
 # -----------------------------------------------------------------------------
 class LumenHttpBridgeHandler(BaseHTTPRequestHandler):
-    """Zero-dependency HTTP Handler servicing the Web Console, Universal Exports, and REST/RPC endpoints."""
+    """Production-hardened HTTP Handler servicing AWS Bedrock, Health Checks, and Zero-Trust APIs."""
 
     runtime: LumenWebBridgeRuntime
     dispatcher: LumenJsonRpcDispatcher
@@ -129,7 +132,35 @@ class LumenHttpBridgeHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Lumen-Api-Key")
+        # Strict HTTP security headers on all responses
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+    def _check_api_auth(self) -> bool:
+        """
+        Constant-time API key verification for /api/* routes.
+        When LUMEN_INTERNAL_API_KEY is set in environment, any request without a
+        matching X-Lumen-Api-Key header is rejected with HTTP 403 Forbidden.
+        """
+        api_key = os.environ.get("LUMEN_INTERNAL_API_KEY", "").strip()
+        if not api_key:
+            return True  # Open in local dev mode when unset
+
+        client_key = self.headers.get("X-Lumen-Api-Key", "").strip()
+        if not client_key or not hmac.compare_digest(client_key, api_key):
+            self._send_json(
+                HTTPStatus.FORBIDDEN,
+                {
+                    "error": "Forbidden: invalid or missing X-Lumen-Api-Key header",
+                    "status": "forbidden",
+                    "code": HTTPStatus.FORBIDDEN,
+                },
+            )
+            return False
+        return True
 
     def do_OPTIONS(self) -> None:
         self.send_response(HTTPStatus.NO_CONTENT)
@@ -139,29 +170,49 @@ class LumenHttpBridgeHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = self.path.split("?")[0]
 
-        # Route 1: Serve Console HTML
+        # Route 1: AWS Health Check (Unauthenticated)
+        if path == "/healthz":
+            self._handle_healthz()
+            return
+
+        # Route 2: Serve Console HTML (if requested)
         if path in ("/", "/index.html", "/console"):
             self._serve_console_html()
             return
 
-        # Route 2: Run 14-Gate Self-Test & Benchmark
+        # Enforce constant-time API key check on all /api/* routes
+        if path.startswith("/api/") or path == "/api":
+            if not self._check_api_auth():
+                return
+
+        # Core Route 1: Session Auth Info
+        if path == "/api/v1/auth/session":
+            self._handle_auth_session()
+            return
+
+        # Core Route 2: SDK Download
+        if path == "/api/v1/sdk/download":
+            self._handle_sdk_download()
+            return
+
+        # Core Route 3: Universal Multi-Format Export API
+        if path == "/api/export":
+            self._handle_export()
+            return
+
+        # Core Route 4: Run 14-Gate Self-Test & Benchmark
         if path == "/api/selftest":
             self._handle_selftest()
             return
 
-        # Route 3: Live Telemetry & QoS snapshot
+        # Core Route 5: Live Telemetry & QoS snapshot
         if path == "/api/telemetry":
             self._handle_telemetry()
             return
 
-        # Route 4: Audit records query
+        # Route 6: Audit records query
         if path == "/api/audit":
             self._handle_audit_records()
-            return
-
-        # Route 5: Universal Multi-Format Export API
-        if path == "/api/export":
-            self._handle_export()
             return
 
         # 404 Not Found
@@ -170,22 +221,32 @@ class LumenHttpBridgeHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path = self.path.split("?")[0]
 
-        # Route 1: Direct JSON-RPC Dispatcher execution
-        if path in ("/api/rpc", "/rpc"):
+        # Enforce constant-time API key check on all /api/* routes
+        if path.startswith("/api/") or path == "/api":
+            if not self._check_api_auth():
+                return
+
+        # Core Route 1: JSON-RPC Gateway Proxy
+        if path in ("/api/v1/gateway/proxy", "/api/rpc", "/rpc"):
             self._handle_rpc()
             return
 
-        # Route 2: Cryptographic HMAC signing helper
+        # Core Route 2: Dynamic Tool Registration
+        if path == "/api/v1/tools/register":
+            self._handle_tool_register()
+            return
+
+        # Route 3: Cryptographic HMAC signing helper
         if path == "/api/sign":
             self._handle_sign()
             return
 
-        # Route 3: Audit chain tampering simulation
+        # Route 4: Audit chain tampering simulation
         if path == "/api/audit/tamper":
             self._handle_audit_tamper()
             return
 
-        # Route 4: Audit chain restore
+        # Route 5: Audit chain restore
         if path == "/api/audit/restore":
             self._handle_audit_restore()
             return
@@ -196,6 +257,97 @@ class LumenHttpBridgeHandler(BaseHTTPRequestHandler):
     # -------------------------------------------------------------------------
     # Route Handlers
     # -------------------------------------------------------------------------
+    def _handle_healthz(self) -> None:
+        """Unauthenticated healthcheck endpoint for AWS ALB/ECS target groups."""
+        self._send_json(HTTPStatus.OK, {"status": "ok", "service": "lumen-bedrock"})
+
+    def _handle_auth_session(self) -> None:
+        """Session metadata, capability negotiation, and authentication status."""
+        session_data = {
+            "status": "OPERATIONAL" if self.dispatcher.handshake.is_operational else self.dispatcher.handshake.state.name,
+            "service": "lumen-bedrock",
+            "protocolVersion": self.config.protocol_version,
+            "serverInfo": {
+                "name": self.config.server_name,
+                "version": self.config.server_version,
+                "ecosystem": "Alexa+ Enterprise / Amazon Bedrock Agent Integration",
+            },
+            "capabilities": {
+                "zeroTrust": {
+                    "hmacAttestation": "HMAC-SHA256",
+                    "blake2bAudit": True,
+                    "qosPriority": True,
+                    "hitl": True,
+                },
+                "registeredTools": len(self.dispatcher.tools._tools),
+            },
+            "authenticated": True,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        self._send_json(HTTPStatus.OK, session_data)
+
+    def _handle_sdk_download(self) -> None:
+        """Download standalone installable client SDK module."""
+        sdk_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lumen_sdk.py")
+        if not os.path.exists(sdk_file):
+            self.send_error(HTTPStatus.NOT_FOUND, "SDK file not found")
+            return
+        with open(sdk_file, "rb") as f:
+            data = f.read()
+        self._send_file_bytes(
+            HTTPStatus.OK,
+            data,
+            content_type="text/x-python; charset=utf-8",
+            filename="lumen_sdk.py",
+        )
+
+    def _handle_tool_register(self) -> None:
+        """Dynamic enterprise tool registration into the core ToolRegistry."""
+        body = self._read_json_body()
+        name = body.get("name")
+        if not name or not isinstance(name, str):
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Missing or invalid tool 'name'"})
+            return
+
+        description = body.get("description", "Dynamically registered enterprise tool")
+        input_schema = body.get("inputSchema") or body.get("input_schema") or {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": True,
+        }
+        required_scope = body.get("requiredScope") or body.get("required_scope") or "tools:execute"
+        min_clearance_raw = body.get("minClearance") or body.get("min_clearance") or "INTERNAL"
+        try:
+            min_clearance = ClearanceLevel.from_str(min_clearance_raw)
+        except Exception:
+            min_clearance = ClearanceLevel.INTERNAL
+
+        def _dynamic_handler(args: Dict[str, Any], sec_ctx: Any, cfg: Any) -> Dict[str, Any]:
+            return {
+                "resultType": "complete",
+                "tool": name,
+                "arguments": args,
+                "executedBy": sec_ctx.principal_id,
+                "status": "SUCCESS",
+            }
+
+        tool_def = ToolDefinition(
+            name=ToolName(name),
+            description=description,
+            input_schema=input_schema,
+            required_scope=required_scope,
+            min_clearance=min_clearance,
+            handler=_dynamic_handler,
+        )
+        self.dispatcher.tools.register(tool_def)
+        self._send_json(HTTPStatus.OK, {
+            "status": "registered",
+            "tool": name,
+            "description": description,
+            "requiredScope": required_scope,
+            "minClearance": min_clearance.name,
+        })
+
     def _serve_console_html(self) -> None:
         if not os.path.exists(self.console_html_path):
             self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, f"Console HTML file not found at {self.console_html_path}")
@@ -208,7 +360,6 @@ class LumenHttpBridgeHandler(BaseHTTPRequestHandler):
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content)))
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(content)
@@ -228,6 +379,7 @@ class LumenHttpBridgeHandler(BaseHTTPRequestHandler):
 
         telemetry = {
             "status": "OPERATIONAL" if self.dispatcher.handshake.is_operational else self.dispatcher.handshake.state.name,
+            "service": "lumen-bedrock",
             "serverInfo": {
                 "name": self.config.server_name,
                 "version": self.config.server_version,
@@ -590,8 +742,9 @@ class LumenHttpBridgeHandler(BaseHTTPRequestHandler):
 LumenHttpHandler = LumenHttpBridgeHandler
 
 
-def run_http_server(host: str = "127.0.0.1", port: int = 8080) -> None:
+def run_http_server(host: str = "0.0.0.0", port: Optional[int] = None) -> None:
     """Launch the HTTP server bridging the console and universal exports to the live gateway."""
+    actual_port = port if port is not None else int(os.environ.get("PORT", "8080"))
     config = LumenConfig()
     runtime = LumenWebBridgeRuntime(config=config)
 
@@ -603,18 +756,19 @@ def run_http_server(host: str = "127.0.0.1", port: int = 8080) -> None:
     LumenHttpBridgeHandler.config = config
     LumenHttpBridgeHandler.console_html_path = html_file
 
-    server = ThreadingHTTPServer((host, port), LumenHttpBridgeHandler)
+    server = ThreadingHTTPServer((host, actual_port), LumenHttpBridgeHandler)
     print(f"\n==========================================================================")
-    print(f"  LUMEN v2.0 ZERO-TRUST MCP GATEWAY & INTERACTIVE OPERATIONS CONSOLE")
+    print(f"  LUMEN v2.0 ZERO-TRUST MCP GATEWAY & AWS BEDROCK SERVER")
     print(f"  Amazon Developer Hackathon 2026 ('Build, Ship, Shape')")
     print(f"==========================================================================")
-    print(f"  Web Console URL  : http://{host}:{port}/")
-    print(f"  Universal Export : http://{host}:{port}/api/export?format=aws_bedrock")
-    print(f"  REST / RPC URL   : http://{host}:{port}/api/rpc")
-    print(f"  Telemetry URL    : http://{host}:{port}/api/telemetry")
-    print(f"  Self-Test URL    : http://{host}:{port}/api/selftest")
-    print(f"  Audit Ledger     : http://{host}:{port}/api/audit")
-    print(f"  Server State     : OPERATIONAL (Zero-Trust Guardrails Active)")
+    print(f"  Server Host / Port : {host}:{actual_port}")
+    print(f"  Health Check       : http://{host}:{actual_port}/healthz")
+    print(f"  Session Auth API   : http://{host}:{actual_port}/api/v1/auth/session")
+    print(f"  Gateway Proxy API  : http://{host}:{actual_port}/api/v1/gateway/proxy")
+    print(f"  Tool Register API  : http://{host}:{actual_port}/api/v1/tools/register")
+    print(f"  SDK Download API   : http://{host}:{actual_port}/api/v1/sdk/download")
+    print(f"  Universal Export   : http://{host}:{actual_port}/api/export?format=aws_bedrock")
+    print(f"  Server State       : OPERATIONAL (Zero-Trust Guardrails Active)")
     print(f"==========================================================================\n")
 
     try:
@@ -625,9 +779,10 @@ def run_http_server(host: str = "127.0.0.1", port: int = 8080) -> None:
 
 
 def main() -> None:
+    default_port = int(os.environ.get("PORT", "8080"))
     parser = argparse.ArgumentParser(description="Lumen v2.0 Enterprise HTTP Bridge & Web Console")
-    parser.add_argument("--host", default="127.0.0.1", help="Host address (default: 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
+    parser.add_argument("--host", default="0.0.0.0", help="Host address (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=default_port, help=f"Port (default: {default_port})")
     args = parser.parse_args()
 
     run_http_server(host=args.host, port=args.port)
