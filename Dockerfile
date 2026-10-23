@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy only core backend files
+# Copy application files
 COPY pyproject.toml .
 COPY lumen_config.py .
 COPY lumen_handshake.py .
@@ -11,6 +11,7 @@ COPY lumen_sdk.py .
 COPY lumen_engine.py .
 COPY lumen_custom_plugin_demo.py .
 COPY lumen_http_bridge.py .
+COPY lumen_console.html .
 COPY mcp_config.json .
 COPY lumen_client_integration_manual.md .
 
